@@ -1,0 +1,46 @@
+# The site on GitHub Pages: site/build.mjs reads this repository's releases through the API, the notes in notes/cli/
+# and the charts in data/bench.json, and the page goes out. A release is published by cli-release.yml of the private
+# super-repo (with a token, so its event starts this workflow); a push here (notes, data, the site) rebuilds too.
+name: pages
+
+on:
+  push:
+    branches: [main]
+  release:
+    types: [published, edited, deleted]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node --test site/build.test.mjs
+      - run: node site/build.mjs --out _site
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

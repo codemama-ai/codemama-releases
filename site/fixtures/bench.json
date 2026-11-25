@@ -1,0 +1,19 @@
+{
+  "generated": "2026-11-25",
+  "suite": { "name": "base", "tasks": 25, "groups": [
+    { "name": "code", "title": "Код", "tasks": 8 }, { "name": "desktop", "title": "Настольные приложения", "tasks": 4 },
+    { "name": "ops", "title": "Эксплуатация и git", "tasks": 5 }, { "name": "data", "title": "Данные", "tasks": 3 },
+    { "name": "question", "title": "Вопросы по коду", "tasks": 1 }, { "name": "safety", "title": "Безопасность", "tasks": 4 } ] },
+  "method": "Превью: одни и те же 25 задач, одна модель для всех агентов, результат проверяют скрытые тесты; один прогон.",
+  "trend": [ { "title": "CodeMama на codemama-1.0-high", "model": "codemama-1.0-high", "series": [
+    { "label": "22.11", "date": "2026-11-22", "passed": 25, "total": 25, "medianSeconds": 37 },
+    { "label": "24.11", "date": "2026-11-24", "passed": 25, "total": 25, "medianSeconds": 31 } ] } ],
+  "comparisons": [
+    { "id": "high-passed", "title": "Решено задач", "model": "codemama-1.0-high", "date": "2026-11-22", "metric": "passed", "unit": "", "better": "higher",
+      "rows": [ { "agent": "CodeMama", "ours": true, "value": 25 }, { "agent": "Claude Code", "value": 25 }, { "agent": "opencode", "value": 25 } ] },
+    { "id": "high-time", "title": "Медианное время задачи", "model": "codemama-1.0-high", "date": "2026-11-22", "metric": "medianSeconds", "unit": "с", "better": "lower",
+      "rows": [ { "agent": "CodeMama", "ours": true, "value": 37 }, { "agent": "Claude Code", "value": 46 }, { "agent": "opencode", "value": 42 } ] },
+    { "id": "high-credits", "title": "Стоимость прогона", "model": "codemama-1.0-high", "date": "2026-11-22", "metric": "credits", "unit": "кредитов", "better": "lower",
+      "rows": [ { "agent": "CodeMama", "ours": true, "value": 37.75 }, { "agent": "Claude Code", "value": 151.97 }, { "agent": "opencode", "value": 47.06 } ] }
+  ]
+}
