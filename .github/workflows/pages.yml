@@ -28,9 +28,11 @@ jobs:
         with:
           node-version: 22
       - run: node --test site/build.test.mjs
-      - run: node site/build.mjs --out _site
+      # A release's own event can come before the API lists it: the build waits for that tag.
+      - run: node site/build.mjs --out _site ${EXPECT:+--expect "$EXPECT"}
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          EXPECT: ${{ github.event_name == 'release' && github.event.action != 'deleted' && github.event.release.tag_name || '' }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site

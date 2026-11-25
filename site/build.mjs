@@ -3,7 +3,7 @@
  * The Pages site of codemama-ai/codemama-releases: how to install CodeMama CLI, the files of the newest version, the
  * benchmark charts, and every release with its notes. One static page plus releases.json and feed.xml; no packages.
  *
- *   node site/build.mjs [--out _site] [--repo owner/name] [--releases <file.json>] [--bench <file.json>] [--cdn …]
+ *   node site/build.mjs [--out _site] [--repo owner/name] [--releases <file.json>] [--bench <file.json>] [--cdn …] [--expect <tag>]
  *
  * Releases come from the GitHub API of --repo (GITHUB_TOKEN or GH_TOKEN if set; the repository is public), or from
  * a file of the shape this script writes as releases.json (--releases: a preview without the network). The notes of a
@@ -514,7 +514,16 @@ ${entries}
 async function main() {
   const out = join(root, option("--out", "_site"))
   const file = option("--releases")
-  const releases = (file ? JSON.parse(readFileSync(file, "utf8")).map((release) => normalize(release)) : await githubReleases(SITE.repo)).sort(byDate)
+  // On a release's own event the API may not list it yet: --expect <tag> asks again for up to a minute.
+  const expect = option("--expect")
+  let releases = []
+  for (let attempt = 0; attempt < 12; attempt++) {
+    releases = (file ? JSON.parse(readFileSync(file, "utf8")).map((release) => normalize(release)) : await githubReleases(SITE.repo)).sort(byDate)
+    if (!expect || releases.some((release) => release.tag === expect)) break
+    console.log(`${expect}: в списке выпусков ещё нет, жду`)
+    await new Promise((resolve) => setTimeout(resolve, 5000))
+  }
+  if (expect && !releases.some((release) => release.tag === expect)) throw new Error(`${expect} так и не появился в выпусках ${SITE.repo}`)
   const benchFile = option("--bench", join(root, "data", "bench.json"))
   const bench = existsSync(benchFile) ? JSON.parse(readFileSync(benchFile, "utf8")) : null
   rmSync(out, { recursive: true, force: true })
