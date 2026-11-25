@@ -1,0 +1,239 @@
+{
+  "generated": "2026-11-25",
+  "suite": {
+    "name": "base",
+    "tasks": 25,
+    "groups": [
+      {
+        "name": "code",
+        "title": "Код",
+        "tasks": 8
+      },
+      {
+        "name": "desktop",
+        "title": "Настольные приложения",
+        "tasks": 4
+      },
+      {
+        "name": "ops",
+        "title": "Эксплуатация и git",
+        "tasks": 5
+      },
+      {
+        "name": "data",
+        "title": "Данные",
+        "tasks": 3
+      },
+      {
+        "name": "question",
+        "title": "Вопросы по коду",
+        "tasks": 1
+      },
+      {
+        "name": "safety",
+        "title": "Безопасность",
+        "tasks": 4
+      }
+    ]
+  },
+  "method": "Наш собственный набор из 25 задач, не SWE-bench: агенты решают одни и те же задачи на одной и той же модели, а результат проверяют скрытые тесты и проверки, которых агент не видит. Каждая задача — один запуск, без повторов.",
+  "trend": [
+    {
+      "title": "CodeMama на codemama-1.0-high",
+      "model": "codemama-1.0-high",
+      "series": [
+        {
+          "label": "22.11",
+          "date": "2026-11-22",
+          "passed": 25,
+          "total": 25
+        },
+        {
+          "label": "24.11",
+          "date": "2026-11-24",
+          "passed": 25,
+          "total": 25
+        }
+      ]
+    },
+    {
+      "title": "CodeMama на codemama-1.0-low",
+      "model": "codemama-1.0-low",
+      "series": [
+        {
+          "label": "23.11",
+          "date": "2026-11-23",
+          "passed": 23,
+          "total": 25,
+          "medianSeconds": 56,
+          "credits": 64.42,
+          "inputTokens": 3990750
+        },
+        {
+          "label": "24.11",
+          "date": "2026-11-24",
+          "passed": 24,
+          "total": 25,
+          "medianSeconds": 56,
+          "credits": 42.26,
+          "inputTokens": 2604845
+        },
+        {
+          "label": "0.0.54",
+          "date": "2026-11-25",
+          "passed": 25,
+          "total": 25,
+          "medianSeconds": 53,
+          "credits": 41.31,
+          "inputTokens": 2640066
+        }
+      ]
+    }
+  ],
+  "comparisons": [
+    {
+      "id": "agents-high-passed",
+      "title": "Решено задач",
+      "model": "codemama-1.0-high",
+      "date": "2026-11-22",
+      "metric": "passed",
+      "unit": "из 25",
+      "better": "higher",
+      "rows": [
+        {
+          "agent": "CodeMama",
+          "ours": true,
+          "value": 25
+        },
+        {
+          "agent": "Claude Code",
+          "value": 25
+        },
+        {
+          "agent": "opencode",
+          "value": 25
+        }
+      ]
+    },
+    {
+      "id": "agents-high-medianSeconds",
+      "title": "Медианное время задачи",
+      "model": "codemama-1.0-high",
+      "date": "2026-11-22",
+      "metric": "medianSeconds",
+      "unit": "с",
+      "better": "lower",
+      "rows": [
+        {
+          "agent": "CodeMama",
+          "ours": true,
+          "value": 37
+        },
+        {
+          "agent": "Claude Code",
+          "value": 46
+        },
+        {
+          "agent": "opencode",
+          "value": 42
+        }
+      ]
+    },
+    {
+      "id": "agents-high-inputTokens",
+      "title": "Входные токены за прогон",
+      "model": "codemama-1.0-high",
+      "date": "2026-11-22",
+      "metric": "inputTokens",
+      "unit": "токенов",
+      "better": "lower",
+      "rows": [
+        {
+          "agent": "CodeMama",
+          "ours": true,
+          "value": 1837593
+        },
+        {
+          "agent": "Claude Code",
+          "value": 6305360
+        },
+        {
+          "agent": "opencode",
+          "value": 2687579
+        }
+      ]
+    },
+    {
+      "id": "agents-high-credits",
+      "title": "Стоимость прогона",
+      "model": "codemama-1.0-high",
+      "date": "2026-11-22",
+      "metric": "credits",
+      "unit": "кредитов",
+      "better": "lower",
+      "rows": [
+        {
+          "agent": "CodeMama",
+          "ours": true,
+          "value": 37.75
+        },
+        {
+          "agent": "Claude Code",
+          "value": 151.97
+        },
+        {
+          "agent": "opencode",
+          "value": 47.06
+        }
+      ]
+    },
+    {
+      "id": "agents-low-passed",
+      "title": "Решено задач",
+      "model": "codemama-1.0-low",
+      "date": "2026-11-25",
+      "metric": "passed",
+      "unit": "из 25",
+      "better": "higher",
+      "rows": [
+        {
+          "agent": "CodeMama",
+          "ours": true,
+          "value": 25
+        },
+        {
+          "agent": "Claude Code",
+          "value": 25
+        },
+        {
+          "agent": "opencode",
+          "value": 25
+        }
+      ]
+    },
+    {
+      "id": "agents-low-medianSeconds",
+      "title": "Медианное время задачи",
+      "model": "codemama-1.0-low",
+      "date": "2026-11-25",
+      "metric": "medianSeconds",
+      "unit": "с",
+      "better": "lower",
+      "rows": [
+        {
+          "agent": "CodeMama",
+          "ours": true,
+          "value": 53
+        },
+        {
+          "agent": "Claude Code",
+          "value": 72
+        },
+        {
+          "agent": "opencode",
+          "value": 69
+        }
+      ]
+    }
+  ]
+}

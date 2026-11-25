@@ -354,11 +354,11 @@ function benchSection(bench) {
     .map((comparison) => {
       const head = headline(comparison, tasks)
       return `<article class="card chart-card">
-  <p class="eyebrow">${escape(comparison.title)}</p>
+  <p class="eyebrow">${escape(comparison.title)} · ${escape(comparison.model)}</p>
   <h3>${escape(head.title)}</h3>
   ${head.lines.length ? `<p class="lead">${head.lines.map(escape).join("<br>")}</p>` : ""}
   ${barChart(comparison, tasks)}
-  <p class="meta">${escape(comparison.model)} · ${escape(dateText(comparison.date))} · ${comparison.better === "lower" ? "меньше — лучше" : "больше — лучше"}</p>
+  <p class="meta">${escape(dateText(comparison.date))} · ${comparison.better === "lower" ? "меньше — лучше" : "больше — лучше"}</p>
   ${table(["Агент", comparison.title], comparison.rows.map((row) => [row.agent, valueText(comparison.metric, row.value, comparison.unit)]))}
 </article>`
     })
