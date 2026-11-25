@@ -178,9 +178,20 @@ export function versus(metric, ours, other, agent) {
 
 const capital = (text) => text.charAt(0).toUpperCase() + text.slice(1)
 
+function creditsWord(value) {
+  if (!Number.isInteger(value)) return "кредита"
+  const tens = value % 100
+  const last = value % 10
+  if (tens >= 11 && tens <= 14) return "кредитов"
+  if (last === 1) return "кредит"
+  if (last >= 2 && last <= 4) return "кредита"
+  return "кредитов"
+}
+
 function valueText(metric, value, unit) {
   if (metric === "inputTokens") return `${compact(value)} ${unit}`.trim()
-  if (metric === "credits") return `${number(value, value < 100 ? 1 : 0)} ${unit}`.trim()
+  // A fraction takes the genitive singular: 37,8 кредита, 152 кредита, 150 кредитов.
+  if (metric === "credits") return `${number(value, value < 100 ? 1 : 0)} ${unit === "кредитов" ? creditsWord(value < 100 ? Math.round(value * 10) / 10 : Math.round(value)) : unit}`.trim()
   return `${number(value, Number.isInteger(value) ? 0 : 1)} ${unit}`.trim()
 }
 
@@ -315,7 +326,10 @@ function trendCard(trend) {
   const first = series[0]
   const last = series[series.length - 1]
   const point = (pick) => series.map((item) => ({ label: item.label, date: dateText(item.date), value: pick(item) }))
-  const other = TREND_METRICS.find((entry) => series.every((item) => typeof item[entry.key] === "number"))
+  // Of the metrics the export kept, the one that improved most (first to last); a flat one only when none improved.
+  const kept = TREND_METRICS.filter((entry) => series.every((item) => typeof item[entry.key] === "number"))
+  const gain = (entry) => (first[entry.key] > 0 ? (first[entry.key] - last[entry.key]) / first[entry.key] : 0)
+  const other = kept.slice().sort((a, b) => gain(b) - gain(a))[0]
   const lead = other && series.length > 1 && last[other.key] < first[other.key] ? other.lead(first[other.key], last[other.key]) : ""
   const title = series.length > 1 && last.passed > first.passed ? `${last.passed} из ${last.total} задач — было ${first.passed}` : `${last.passed} из ${last.total} задач`
   const figures = [`<figure><figcaption>Решено задач из ${last.total}</figcaption>${lineChart(point((item) => item.passed), { title: "Решено задач", metric: "passed", max: last.total, unit: "" })}</figure>`]
@@ -426,11 +440,12 @@ function releaseList(releases) {
 }
 
 export function page({ releases, bench }) {
+  const benchHtml = benchSection(bench)
   const stable = releases.find((release) => release.channel === "stable")
   const latest = stable ?? releases[0]
   const version = latest
     ? `<p class="version">Версия ${escape(latest.version)}${latest.channel === "beta" ? " (beta)" : ""} · ${escape(dateText(latest.date))} · <a href="#v${escape(latest.version)}${latest.channel === "beta" ? "-beta" : ""}">что нового</a></p>`
-    : `<p class="version">Первый выпуск готовится</p>`
+    : ""
   return `<!doctype html>
 <html lang="ru">
 <head>
@@ -448,7 +463,7 @@ export function page({ releases, bench }) {
 <a class="skip" href="#main">К содержанию</a>
 <header class="top">
   <a class="brand" href="./"><img src="logo.svg" alt="" width="32" height="32"><span>CodeMama <b>CLI</b></span></a>
-  <nav aria-label="Разделы"><a href="#install">Установка</a><a href="#bench">Замеры</a><a href="#releases">Выпуски</a><a href="${SITE.home}">codemama.ru</a></nav>
+  <nav aria-label="Разделы"><a href="#install">Установка</a>${benchHtml ? '<a href="#bench">Замеры</a>' : ""}<a href="#releases">Выпуски</a><a href="${SITE.home}">codemama.ru</a></nav>
 </header>
 <main id="main">
 <section id="install" class="hero">
@@ -459,7 +474,7 @@ export function page({ releases, bench }) {
   ${version}
 </section>
 ${downloads(latest)}
-${benchSection(bench)}
+${benchHtml}
 ${releaseList(releases)}
 </main>
 <footer class="bottom">
