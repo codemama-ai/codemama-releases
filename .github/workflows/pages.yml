@@ -1,6 +1,10 @@
-# The site on GitHub Pages: site/build.mjs reads this repository's releases through the API, the notes in notes/cli/
-# and the charts in data/bench.json, and the page goes out. A release is published by cli-release.yml of the private
-# super-repo (with a token, so its event starts this workflow); a push here (notes, data, the site) rebuilds too.
+# The site on GitHub Pages: site/build.mjs reads this repository's releases through the API, the notes in notes/ and
+# the charts in data/bench.json, and the page goes out. Releases come from the private super-repo (cli-release.yml,
+# vscode-release.yml) with a token, so their events start this workflow; a push here (notes, data, the site) too.
+#
+# A release's event runs on its tag, and Pages keeps serving what main deployed (a deployment from the tag reports
+# success and changes nothing). So the release only asks for a build on main and names its tag, which that build waits
+# for: on its own event the API may not list the release yet.
 name: pages
 
 on:
@@ -9,6 +13,11 @@ on:
   release:
     types: [published, edited, deleted]
   workflow_dispatch:
+    inputs:
+      expect:
+        description: A release tag the build waits for until the API lists it
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -16,11 +25,23 @@ permissions:
   id-token: write
 
 concurrency:
-  group: pages
+  group: pages-${{ github.event_name == 'release' && 'release' || 'build' }}
   cancel-in-progress: true
 
 jobs:
+  release:
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - run: gh workflow run pages.yml --repo "$GITHUB_REPOSITORY" --ref main -f expect="$TAG"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.action != 'deleted' && github.event.release.tag_name || '' }}
+
   build:
+    if: github.event_name != 'release'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -28,11 +49,10 @@ jobs:
         with:
           node-version: 22
       - run: node --test site/build.test.mjs
-      # A release's own event can come before the API lists it: the build waits for that tag.
       - run: node site/build.mjs --out _site ${EXPECT:+--expect "$EXPECT"}
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          EXPECT: ${{ github.event_name == 'release' && github.event.action != 'deleted' && github.event.release.tag_name || '' }}
+          EXPECT: ${{ inputs.expect }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site
