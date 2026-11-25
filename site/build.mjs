@@ -1,13 +1,14 @@
 #!/usr/bin/env node
 /**
- * The Pages site of codemama-ai/codemama-releases: how to install CodeMama CLI, the files of the newest version, the
- * benchmark charts, and every release with its notes. One static page plus releases.json and feed.xml; no packages.
+ * The Pages site of codemama-ai/codemama-releases: how to get CodeMama (the CLI, the VS Code extension, later Desktop),
+ * the files of each product's newest version, the benchmark charts, and every release with its notes. One static page
+ * plus releases.json and feed.xml; no packages.
  *
  *   node site/build.mjs [--out _site] [--repo owner/name] [--releases <file.json>] [--bench <file.json>] [--cdn …] [--expect <tag>]
  *
  * Releases come from the GitHub API of --repo (GITHUB_TOKEN or GH_TOKEN if set; the repository is public), or from
  * a file of the shape this script writes as releases.json (--releases: a preview without the network). The notes of a
- * version are notes/cli/<version>.md when the file is there, else the release's text. The charts are data/bench.json.
+ * version are notes/<product>/<version>.md when the file is there, else the release's text. The charts are data/bench.json.
  */
 import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { dirname, join, resolve } from "node:path"
@@ -30,6 +31,34 @@ export const PLATFORMS = [
   { key: "linux-x64", os: "Linux", arch: "x64" },
   { key: "linux-arm64", os: "Linux", arch: "ARM64" },
 ]
+
+/**
+ * What this repository releases, told apart by the tag: cli-v0.0.54, vscode-v0.0.54, desktop-v0.1.9. `file` names a
+ * platform's file in a release (the CLI's archives, the extension's packages); a product without it (Desktop, whose
+ * installers differ per system) lists every file of its release. `direct` is our own copy for the newest release —
+ * the CDN for the CLI, codemama.ru/downloads for the extension — GitHub keeps every version.
+ */
+export const PRODUCTS = [
+  {
+    id: "cli",
+    prefix: "cli-v",
+    name: "CodeMama CLI",
+    label: "CLI",
+    file: (version, platform) => `codemama-${version}-${platform}${platform.startsWith("win32") ? ".zip" : ".tar.gz"}`,
+    direct: (release, platform, file) => `${SITE.cdn}/cli/${release.channel}/${file.name}`,
+  },
+  {
+    id: "vscode",
+    prefix: "vscode-v",
+    name: "CodeMama для VS Code",
+    label: "VS Code",
+    file: (version, platform) => `codemama-${platform}-${version}.vsix`,
+    direct: (release, platform) => `${SITE.home}/downloads/codemama-${platform}.vsix`,
+  },
+  { id: "desktop", prefix: "desktop-v", name: "CodeMama Desktop", label: "Desktop" },
+]
+const SERVICE_FILES = new Set(["manifest.json", "manifest.json.sig", "SHA256SUMS"])
+export const MARKETPLACE = "https://marketplace.visualstudio.com/items?itemName=codemama.codemama"
 
 // ——— text ———
 
@@ -111,9 +140,14 @@ export function compact(value) {
 // ——— releases ———
 
 /** A release of the API, or of releases.json, in the shape the page needs. */
+export function productOf(tag) {
+  return PRODUCTS.find((product) => tag.startsWith(product.prefix))
+}
+
 export function normalize(release, sums = {}) {
   const tag = release.tag ?? release.tag_name
-  const version = release.version ?? tag.replace(/^cli-v/, "").replace(/-beta$/, "")
+  const product = productOf(tag) ?? PRODUCTS[0]
+  const version = release.version ?? tag.slice(product.prefix.length).replace(/-beta$/, "")
   const channel = release.channel ?? (release.prerelease || tag.endsWith("-beta") ? "beta" : "stable")
   const assets = (release.assets ?? []).map((asset) => ({
     name: asset.name,
@@ -122,13 +156,25 @@ export function normalize(release, sums = {}) {
     sha256: asset.sha256 ?? (asset.digest?.startsWith("sha256:") ? asset.digest.slice(7) : sums[asset.name]),
   }))
   const files = {}
-  for (const platform of PLATFORMS) {
-    const asset = assets.find((item) => item.name === `codemama-${version}-${platform.key}${platform.key.startsWith("win32") ? ".zip" : ".tar.gz"}`)
-    if (asset) files[platform.key] = asset
+  if (product.file) {
+    for (const platform of PLATFORMS) {
+      const asset = assets.find((item) => item.name === product.file(version, platform.key))
+      if (asset) files[platform.key] = asset
+    }
   }
-  const notesFile = join(root, "notes", "cli", `${version}.md`)
+  const notesFile = join(root, "notes", product.id, `${version}.md`)
   const notes = existsSync(notesFile) ? readFileSync(notesFile, "utf8") : (release.notes ?? release.body ?? "")
-  return { tag, version, channel, date: release.date ?? release.published_at ?? release.created_at, url: release.url?.startsWith("https://github.com/") ? release.url : release.html_url, notes, files, assets }
+  return {
+    product: product.id,
+    tag,
+    version,
+    channel,
+    date: release.date ?? release.published_at ?? release.created_at,
+    url: release.url?.startsWith("https://github.com/") ? release.url : release.html_url,
+    notes,
+    files,
+    assets: assets.filter((asset) => !SERVICE_FILES.has(asset.name)),
+  }
 }
 
 async function githubReleases(repo) {
@@ -143,7 +189,7 @@ async function githubReleases(repo) {
     if (list.length < 100) break
   }
   const releases = []
-  for (const release of all.filter((item) => !item.draft && item.tag_name.startsWith("cli-v"))) {
+  for (const release of all.filter((item) => !item.draft && productOf(item.tag_name))) {
     // The API gives each asset's digest; an older release without it has SHA256SUMS beside the archives.
     let sums = {}
     const list = release.assets.find((asset) => asset.name === "SHA256SUMS")
@@ -385,38 +431,80 @@ function installBlock() {
     `<div role="tabpanel" id="panel-${id}" aria-labelledby="tab-${id}"${hidden ? " hidden" : ""}><p class="hint">${hint}</p><div class="command"><code>${escape(command)}</code><button class="copy" data-copy="${escape(command)}" aria-label="Скопировать команду">Скопировать</button></div></div>`
   return `<div class="install" data-tabs>
   <div role="tablist" aria-label="Система">${tab("windows", "Windows", true)}${tab("unix", "macOS и Linux", false)}</div>
-  ${panel("windows", "PowerShell, без прав администратора:", windows, false)}
+  ${panel("windows", "Терминал, PowerShell, без прав администратора:", windows, false)}
   ${panel("unix", "Терминал, без root:", unix, true)}
   <p class="after">Потом в папке проекта: <code>codemama</code> или <code>mama</code>. Новая версия — <code>codemama update</code>.</p>
 </div>`
 }
 
-/** Before the first release the install commands lead nowhere: say so, and where CodeMama is already. */
-function soon() {
-  return `<div class="card soon"><p><b>Первый выпуск CLI готовится.</b> А пока CodeMama работает в <a href="https://marketplace.visualstudio.com/items?itemName=codemama.codemama">VS Code</a> — тот же агент, в редакторе.</p></div>`
+const anchor = (release) => escape(release.tag)
+const versionLine = (release) =>
+  `<p class="version">${escape(PRODUCTS.find((product) => product.id === release.product).name)} ${escape(release.version)}${release.channel === "beta" ? " (beta)" : ""} · ${escape(dateText(release.date))} · <a href="#${anchor(release)}">что нового</a></p>`
+
+/** Where each product is had: the CLI by a command, the extension from the Marketplace, Desktop by its installer. */
+function getIt(latest) {
+  const cli = latest.cli
+    ? `${installBlock()}${versionLine(latest.cli)}`
+    : `<div class="card soon"><p><b>Первый выпуск CLI готовится.</b></p></div>`
+  const vscode = `<div class="card get">
+  <p class="get-title">Расширение для VS Code</p>
+  <p class="get-text">Агент в панели редактора и в чате как <code>@codemama</code>.</p>
+  <div class="actions"><a class="button" href="${MARKETPLACE}">Установить из Marketplace</a>${latest.vscode ? `<a class="link" href="#files-vscode">или файлом</a>` : ""}</div>
+</div>${latest.vscode ? versionLine(latest.vscode) : ""}`
+  const desktop = latest.desktop
+    ? `<div class="card get"><p class="get-title">Приложение CodeMama Desktop</p><p class="get-text">Агент в своём окне: проекты, чаты и браузер агента.</p><div class="actions"><a class="button" href="#files-desktop">Скачать</a></div></div>${versionLine(latest.desktop)}`
+    : ""
+  return `<div class="get-grid"><div>${cli}</div><div>${vscode}${desktop}</div></div>`
 }
 
+function sum(file) {
+  return file.sha256 ? `<button class="sum" data-copy="${escape(file.sha256)}" title="SHA-256: ${escape(file.sha256)}">SHA-256 ${escape(file.sha256.slice(0, 12))}…</button>` : ""
+}
+
+/** The newest release of a product: a card per platform (or per file, for Desktop), our copy first, GitHub beside it. */
 function downloads(release) {
   if (!release) return ""
-  const cards = PLATFORMS.filter((platform) => release.files[platform.key])
-    .map((platform) => {
-      const file = release.files[platform.key]
-      const cdn = `${SITE.cdn}/cli/${release.channel}/${file.name}`
-      return `<li class="card file">
+  const product = PRODUCTS.find((item) => item.id === release.product)
+  const kind = (name) => (name.endsWith(".vsix") ? ".vsix" : name.endsWith(".zip") ? ".zip" : name.endsWith(".tar.gz") ? ".tar.gz" : name.slice(name.lastIndexOf(".")))
+  const cards = product.file
+    ? PLATFORMS.filter((platform) => release.files[platform.key])
+        .map((platform) => {
+          const file = release.files[platform.key]
+          return `<li class="card file">
   <p class="os">${escape(platform.os)} <span>${escape(platform.arch)}</span></p>
-  <p class="meta">${escape(file.name.endsWith(".zip") ? ".zip" : ".tar.gz")} · ${megabytes(file.size)}</p>
-  <div class="actions"><a class="button" href="${escape(cdn)}">Скачать</a><a class="link" href="${escape(file.url)}">с GitHub</a></div>
-  ${file.sha256 ? `<button class="sum" data-copy="${escape(file.sha256)}" title="SHA-256: ${escape(file.sha256)}">SHA-256 ${escape(file.sha256.slice(0, 12))}…</button>` : ""}
+  <p class="meta">${escape(kind(file.name))} · ${megabytes(file.size)}</p>
+  <div class="actions"><a class="button" href="${escape(product.direct(release, platform.key, file))}">Скачать</a><a class="link" href="${escape(file.url)}">с GitHub</a></div>
+  ${sum(file)}
 </li>`
-    })
-    .join("\n")
-  return `<section id="download" class="section">
+        })
+        .join("\n")
+    : release.assets
+        .map(
+          (file) => `<li class="card file">
+  <p class="os">${escape(file.name)}</p>
+  <p class="meta">${megabytes(file.size)}</p>
+  <div class="actions"><a class="button" href="${escape(file.url)}">Скачать</a></div>
+  ${sum(file)}
+</li>`,
+        )
+        .join("\n")
+  const about = {
+    cli: `Архив с одной программой: <code>codemama</code> или <code>codemama.exe</code>. Распакуйте в папку из <code>PATH</code> — или поставьте командой выше, она сделает это сама и проверит контрольную сумму.`,
+    vscode: `Пакет расширения под свою систему: в VS Code — «Extensions» → «…» → «Install from VSIX…». Проще — из <a href="${MARKETPLACE}">Marketplace</a>, тогда VS Code обновляет его сам.`,
+    desktop: `Установщик приложения для своей системы.`,
+  }[product.id]
+  const fine = {
+    cli: `Скачивание идёт с нашего сервера в России; «с GitHub» — то же самое из архива выпусков. Контрольные суммы — <a href="${escape(`${SITE.cdn}/cli/${release.channel}/SHA256SUMS`)}">SHA256SUMS</a>; манифест выпуска подписан ключом CodeMama, <code>codemama update</code> проверяет подпись.`,
+    vscode: `«Скачать» — с codemama.ru, «с GitHub» — тот же пакет из архива выпусков, где лежат и прежние версии.`,
+    desktop: `Файлы — из архива выпусков на GitHub, там же прежние версии.`,
+  }[product.id]
+  return `<section id="files-${product.id}" class="section">
   <div class="section-head">
-    <h2>Файлы версии ${escape(release.version)}</h2>
-    <p>Архив с одной программой: <code>codemama</code> или <code>codemama.exe</code>. Распакуйте в папку из <code>PATH</code> — или поставьте командой выше, она сделает это сама и проверит контрольную сумму.</p>
+    <h2>${escape(product.name)} ${escape(release.version)}</h2>
+    <p>${about}</p>
   </div>
   <ul class="files">${cards}</ul>
-  <p class="fine">Скачивание идёт с нашего сервера в России; «с GitHub» — то же самое из архива выпусков. Контрольные суммы всех файлов — <a href="${escape(`${SITE.cdn}/cli/${release.channel}/SHA256SUMS`)}">SHA256SUMS</a>; манифест выпуска подписан ключом CodeMama, <code>codemama update</code> проверяет подпись.</p>
+  <p class="fine">${fine}</p>
 </section>`
 }
 
@@ -426,54 +514,62 @@ function releaseList(releases) {
   }
   const items = releases
     .map((release) => {
-      const links = PLATFORMS.filter((platform) => release.files[platform.key])
-        .map((platform) => `<a href="${escape(release.files[platform.key].url)}">${escape(platform.os)} ${escape(platform.arch)}</a>`)
-        .join(" · ")
-      return `<article class="release" id="v${escape(release.version)}${release.channel === "beta" ? "-beta" : ""}">
-  <header><h3><a href="#v${escape(release.version)}${release.channel === "beta" ? "-beta" : ""}">${escape(release.version)}</a>${release.channel === "beta" ? ' <span class="badge">beta</span>' : ""}</h3><time datetime="${escape(release.date)}">${escape(dateText(release.date))}</time></header>
+      const product = PRODUCTS.find((item) => item.id === release.product)
+      const links = product.file
+        ? PLATFORMS.filter((platform) => release.files[platform.key])
+            .map((platform) => `<a href="${escape(release.files[platform.key].url)}">${escape(platform.os)} ${escape(platform.arch)}</a>`)
+            .join(" · ")
+        : release.assets.map((file) => `<a href="${escape(file.url)}">${escape(file.name)}</a>`).join(" · ")
+      return `<article class="release" id="${anchor(release)}">
+  <header><p class="product">${escape(product.label)}</p><h3><a href="#${anchor(release)}">${escape(release.version)}</a>${release.channel === "beta" ? ' <span class="badge">beta</span>' : ""}</h3><time datetime="${escape(release.date)}">${escape(dateText(release.date))}</time></header>
   <div class="notes">${release.notes.trim() ? markdown(release.notes) : "<p>Исправления и улучшения.</p>"}</div>
-  ${links ? `<p class="links">${links} · <a href="${escape(release.url)}">на GitHub</a></p>` : ""}
+  ${links ? `<p class="links">${links} · <a href="${escape(release.url)}">на GitHub</a></p>` : `<p class="links"><a href="${escape(release.url)}">на GitHub</a></p>`}
 </article>`
     })
     .join("\n")
-  return `<section id="releases" class="section"><div class="section-head"><h2>Выпуски</h2><p>Что нового в каждой версии. Все прежние версии остаются на <a href="https://github.com/${escape(SITE.repo)}/releases">GitHub</a>; подписка — <a href="feed.xml">лента Atom</a>.</p></div>${items}</section>`
+  return `<section id="releases" class="section"><div class="section-head"><h2>Выпуски</h2><p>Что нового в каждой версии CLI, расширения и приложения. Все прежние версии остаются на <a href="https://github.com/${escape(SITE.repo)}/releases">GitHub</a>; подписка — <a href="feed.xml">лента Atom</a>.</p></div>${items}</section>`
+}
+
+/** The newest stable release of each product (a beta when there is no stable one yet). */
+export function newest(releases) {
+  const out = {}
+  for (const product of PRODUCTS) {
+    const own = releases.filter((release) => release.product === product.id)
+    out[product.id] = own.find((release) => release.channel === "stable") ?? own[0]
+  }
+  return out
 }
 
 export function page({ releases, bench }) {
   const benchHtml = benchSection(bench)
-  const stable = releases.find((release) => release.channel === "stable")
-  const latest = stable ?? releases[0]
-  const version = latest
-    ? `<p class="version">Версия ${escape(latest.version)}${latest.channel === "beta" ? " (beta)" : ""} · ${escape(dateText(latest.date))} · <a href="#v${escape(latest.version)}${latest.channel === "beta" ? "-beta" : ""}">что нового</a></p>`
-    : ""
+  const latest = newest(releases)
   return `<!doctype html>
 <html lang="ru">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>CodeMama CLI — агент для разработки в терминале</title>
-<meta name="description" content="CodeMama CLI: ИИ-агент для разработки в терминале Windows, macOS и Linux. Установка одной командой, выпуски, заметки о версиях и замеры.">
-<meta property="og:title" content="CodeMama CLI">
-<meta property="og:description" content="ИИ-агент для разработки в терминале: установка одной командой, выпуски и замеры.">
+<title>Выпуски CodeMama — ИИ-агент для разработки</title>
+<meta name="description" content="CodeMama — ИИ-агент для разработки: консольная версия для Windows, macOS и Linux и расширение для VS Code. Установка, все версии с заметками и замеры.">
+<meta property="og:title" content="Выпуски CodeMama">
+<meta property="og:description" content="ИИ-агент для разработки: в терминале и в VS Code. Установка, версии и замеры.">
 <link rel="icon" href="logo.svg" type="image/svg+xml">
-<link rel="alternate" type="application/atom+xml" title="Выпуски CodeMama CLI" href="feed.xml">
+<link rel="alternate" type="application/atom+xml" title="Выпуски CodeMama" href="feed.xml">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <a class="skip" href="#main">К содержанию</a>
 <header class="top">
-  <a class="brand" href="./"><img src="logo.svg" alt="" width="32" height="32"><span>CodeMama <b>CLI</b></span></a>
+  <a class="brand" href="./"><img src="logo.svg" alt="" width="32" height="32"><span>CodeMama <b>выпуски</b></span></a>
   <nav aria-label="Разделы"><a href="#install">Установка</a>${benchHtml ? '<a href="#bench">Замеры</a>' : ""}<a href="#releases">Выпуски</a><a href="${SITE.home}">codemama.ru</a></nav>
 </header>
 <main id="main">
 <section id="install" class="hero">
-  <p class="eyebrow">CodeMama в терминале</p>
-  <h1>Агент, который доводит задачу до конца — прямо в вашей консоли</h1>
-  <p class="lead">Тот же агент, что в VS Code и в приложении CodeMama: читает проект, правит код, запускает проверки. Windows, macOS и Linux, без прав администратора.</p>
-  ${latest ? installBlock() : soon()}
-  ${version}
+  <p class="eyebrow">Выпуски CodeMama</p>
+  <h1>ИИ-агент для разработки — в терминале и в VS Code</h1>
+  <p class="lead">Читает проект, правит код, запускает проверки и доводит задачу до конца. Windows, macOS и Linux. Здесь — все версии, заметки к ним и замеры.</p>
+  ${getIt(latest)}
 </section>
-${downloads(latest)}
+${PRODUCTS.map((product) => downloads(latest[product.id])).join("\n")}
 ${benchHtml}
 ${releaseList(releases)}
 </main>
@@ -490,19 +586,20 @@ ${releaseList(releases)}
 export function feed(releases) {
   const updated = releases[0]?.date ?? new Date().toISOString()
   const entries = releases
-    .map(
-      (release) => `<entry>
-<title>CodeMama CLI ${escape(release.version)}${release.channel === "beta" ? " (beta)" : ""}</title>
-<id>tag:codemama.ru,2026:cli-${escape(release.version)}${release.channel === "beta" ? "-beta" : ""}</id>
+    .map((release) => {
+      const product = PRODUCTS.find((item) => item.id === release.product)
+      return `<entry>
+<title>${escape(product.name)} ${escape(release.version)}${release.channel === "beta" ? " (beta)" : ""}</title>
+<id>tag:codemama.ru,2026:${escape(release.tag)}</id>
 <link href="${escape(release.url)}"/>
 <updated>${escape(release.date)}</updated>
 <content type="html">${escape(markdown(release.notes))}</content>
-</entry>`,
-    )
+</entry>`
+    })
     .join("\n")
   return `<?xml version="1.0" encoding="utf-8"?>
 <feed xmlns="http://www.w3.org/2005/Atom">
-<title>Выпуски CodeMama CLI</title>
+<title>Выпуски CodeMama</title>
 <id>https://github.com/${escape(SITE.repo)}</id>
 <link href="https://github.com/${escape(SITE.repo)}/releases"/>
 <updated>${escape(updated)}</updated>
@@ -530,7 +627,7 @@ async function main() {
   mkdirSync(out, { recursive: true })
   writeFileSync(join(out, "index.html"), page({ releases, bench }))
   writeFileSync(join(out, "feed.xml"), feed(releases))
-  const index = releases.map(({ tag, version, channel, date, url, files }) => ({ tag, version, channel, date, url, files }))
+  const index = releases.map(({ product, tag, version, channel, date, url, files, assets }) => ({ product, tag, version, channel, date, url, files, assets }))
   writeFileSync(join(out, "releases.json"), `${JSON.stringify(index, null, 2)}\n`)
   for (const name of ["style.css", "app.js", "logo.svg"]) copyFileSync(join(root, "site", name), join(out, name))
   if (existsSync(join(root, "CNAME"))) copyFileSync(join(root, "CNAME"), join(out, "CNAME"))

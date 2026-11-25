@@ -67,6 +67,12 @@ h1 { margin: 0 0 16px; font-size: clamp(32px, 5vw, 52px); line-height: 1.08; let
 .lead { margin: 0 0 24px; color: var(--muted); font-size: 18px; }
 .version { margin: 16px 0 0; color: var(--subtle); font-size: 15px; }
 .soon { padding: 18px 22px; }
+.get-grid { display: grid; gap: 16px; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); align-items: start; }
+@media (max-width: 860px) { .get-grid { grid-template-columns: 1fr; } }
+.get { padding: 18px 22px; margin-bottom: 12px; }
+.get-title { margin: 0 0 4px; font-weight: 600; font-size: 17px; }
+.get-text { margin: 0 0 12px; color: var(--muted); font-size: 15px; }
+.release .product { margin: 0 0 2px; color: var(--red); font-size: 13px; font-weight: 600; }
 .soon p { margin: 0; }
 
 .install { background: var(--code-bg); color: var(--code-ink); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 20px 18px; box-shadow: var(--shadow); }

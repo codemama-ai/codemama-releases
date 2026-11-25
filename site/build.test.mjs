@@ -66,3 +66,34 @@ test("no releases yet: the page says so", () => {
   assert.match(page({ releases: [], bench: null }), /Первый выпуск готовится/)
   assert.equal(escape(`"'<>&`), "&quot;&#39;&lt;&gt;&amp;")
 })
+
+test("several products: the extension's packages, Desktop's files, each with its newest release and its section", async () => {
+  const { newest } = await import("./build.mjs")
+  const vscode = normalize({
+    tag_name: "vscode-v0.0.54",
+    published_at: "2026-11-25T14:00:00Z",
+    html_url: "https://github.com/codemama-ai/codemama-releases/releases/tag/vscode-v0.0.54",
+    body: "- Команды `codemama` и `mama` в терминалах VS Code.",
+    assets: [
+      { name: "codemama-win32-x64-0.0.54.vsix", size: 84, browser_download_url: "https://github.com/x/w.vsix", digest: "sha256:aa" },
+      { name: "SHA256SUMS", size: 1, browser_download_url: "https://github.com/x/SHA256SUMS" },
+    ],
+  })
+  assert.equal(vscode.product, "vscode")
+  assert.equal(vscode.version, "0.0.54")
+  assert.equal(vscode.files["win32-x64"].sha256, "aa")
+  const desktop = normalize({ tag_name: "desktop-v0.1.9", published_at: "2026-11-20T10:00:00Z", html_url: "https://github.com/x", body: "", assets: [{ name: "CodeMama-0.1.9-x64-setup.exe", size: 5, browser_download_url: "https://github.com/x/setup.exe" }, { name: "manifest.json", size: 1, browser_download_url: "https://github.com/x/m" }] })
+  assert.equal(desktop.product, "desktop")
+  assert.deepEqual(desktop.assets.map((asset) => asset.name), ["CodeMama-0.1.9-x64-setup.exe"])
+  const latest = newest([vscode, desktop])
+  assert.equal(latest.vscode, vscode)
+  assert.equal(latest.cli, undefined)
+  const html = page({ releases: [vscode, desktop], bench: null })
+  assert.match(html, /id="files-vscode"/)
+  assert.match(html, /codemama\.ru\/downloads\/codemama-win32-x64\.vsix/)
+  assert.match(html, /id="files-desktop"/)
+  assert.match(html, /CodeMama-0\.1\.9-x64-setup\.exe/)
+  assert.match(html, /id="vscode-v0\.0\.54"/)
+  assert.match(html, /Первый выпуск CLI готовится/)
+  assert.match(feed([vscode]), /CodeMama для VS Code 0\.0\.54/)
+})
